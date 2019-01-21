@@ -30,6 +30,7 @@ from mathutils import (
     Vector,
     geometry,
 )
+import math
 
 def get_plane (face_str):
     # get vectors that define the plane
@@ -58,8 +59,11 @@ class MapFace:
         self.plane_no = plane_no
         self.verts = []
 
-def brush_to_mesh(brush_str):
+
+# add to existing mesh (must already be in edit mode)
+def brush_to_mesh(brush_str, mesh):
     # parse planes from brush_str
+    bm = bmesh.from_edit_mesh(mesh)
     faces = []
     for plane_str in brush.splitlines():
         plane = get_plane(plane_str)
@@ -89,14 +93,30 @@ def brush_to_mesh(brush_str):
         num_verts = len(verts)
         if num_verts < 3:
             print("ERROR: Number of vertices < 3")
+            continue
 
         # get average of vertex positions (approx center)
-        average = Vector()
+        center = Vector()
         for vert in face.verts:
-            average += vert
-        average /= num_verts
+            center += vert
+        center /= num_verts
 
-        # determine winding order of verts
-        # can use dot product to do this?
- 
+        # determine winding order of verts using angle between vectors
+        angles = [(0, 0.0)] # vertex index, angle
+        v1 = (face.verts[0] - center).normalized() # start direction
+        for i, vert in face.verts[1:]:
+            v2 = (vert - center).normalized()
+            angle = v1.angle(v2)
+            cross = v1.cross(v2)
+            if copysign(1, face.plane_no.dot(cross)) < 0:
+                angle += math.pi
+            angles.append((i, angle))
+            
+        # sort indices by angle, then sort face.verts
+        angles.sort(key=lamda vert: vert[1])
+        verts = [face.verts[v[0]] for v in angles]
+        face.verts = verts
+
+        # convert vertices of each face into mesh polygons
+        face = bm.faces.new(face.verts)
 
