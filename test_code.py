@@ -22,6 +22,9 @@ from mathutils import (
 )
 import math
 
+# 1/32, or 32 units == 1m
+map_scale = 0.03125
+
 
 class MapFace:
     def __init__(self, plane_co, plane_no):
@@ -68,33 +71,49 @@ def brush_to_mesh(brush_str, mesh):
         return
 
     # for every possible plane intersection, get vertices
-    all_verts = [] # DEBUG
+    all_verts = []
     for i1, f1 in enumerate(faces[:-2]):
         for i2, f2 in enumerate(faces[i1+1:-1]):
-            for f3 in faces[i2+1:]:
+            for f3 in faces[i2+2:]:
                 vert = intersect_plane_plane_plane(
                     f1.plane_co, f1.plane_no,
                     f2.plane_co, f2.plane_no,
                     f3.plane_co, f3.plane_no
                     )
                 if vert is not None:
-                    f1.verts.append(vert)
-                    f2.verts.append(vert)
-                    f3.verts.append(vert)
+                    #f1.verts.append(vert)
+                    #f2.verts.append(vert)
+                    #f3.verts.append(vert)
                     all_verts.append(vert)
     
-    # Quick test to make sure vertex positions are correct
     print(len(all_verts))
+        
+    # Check each vert is on or inside the convex volume
+    valid_verts = []
+    for i, vert in enumerate(all_verts):
+        #print("VERTEX " + str(i))
+        add_vert = True
+        for face in faces:
+            dis = vert - face.plane_co
+            dot = dis.dot(face.plane_no)
+            #print("dot: " + str(dot))
+            if dot > 0.001:
+                add_vert = False
+                break
+        if add_vert:
+            #print("adding vert")
+            valid_verts.append(vert)
     
-    bm_verts = []
-    for vert in all_verts:
-        bm_verts.append(bm.verts.new(vert))
+    # Add valid verts to the bmesh
+    for vert in valid_verts:
+        bm.verts.new(vert * map_scale)
     bmesh.update_edit_mesh(mesh)
 
     for vert in bm.verts:
         vert.select_set(True)
-        
-    bpy.ops.mesh.convex_hull()
+    
+    if len(valid_verts) > 3:
+        bpy.ops.mesh.convex_hull()
 
 #    # calculate polygons from verts in each list
 #    for face in faces:
@@ -135,11 +154,18 @@ def brush_to_mesh(brush_str, mesh):
 
 
 # brush data as a string
-test_data = """( 128 64 48 ) ( 160 64 -16 ) ( 160 -0 -16 ) __TB_empty -0 -0 -0 1 1
-( 160 -32 -16 ) ( 96 -32 -16 ) ( 128 -32 48 ) __TB_empty -0 -0 -0 1 1
-( 128 64 48 ) ( 96 64 -16 ) ( 160 64 -16 ) __TB_empty -0 -0 -0 1 1
-( 160 64 -16 ) ( 96 64 -16 ) ( 96 -0 -16 ) __TB_empty -0 -0 -0 1 1
-( 96 -0 -16 ) ( 96 64 -16 ) ( 128 64 48 ) __TB_empty -0 -0 -0 1 1"""
+test_data = """( 208 -224 256 ) ( 208 -224 -0 ) ( -0 -224 -0 ) __TB_empty -0 -0 -0 1 1
+( 208 -96 -0 ) ( 208 -224 -0 ) ( 208 -224 256 ) __TB_empty -0 -0 -0 1 1
+( -0 -224 256 ) ( -0 -96 256 ) ( 208 -96 256 ) __TB_empty -0 -0 -0 1 1
+( -0 -224 -0 ) ( -0 -96 -0 ) ( -0 -96 256 ) __TB_empty -0 -0 -0 1 1
+( -0 -96 256 ) ( -0 -96 -0 ) ( 208 -96 -0 ) __TB_empty -0 -0 -0 1 1
+( 208 -96 -0 ) ( -0 -96 -0 ) ( -0 -224 -0 ) __TB_empty -0 -0 -0 1 1
+( 208 -224 192 ) ( 144 -224 256 ) ( 144 -96 256 ) __TB_empty -0 -0 -0 1 1
+( 64 -224 256 ) ( -0 -224 192 ) ( -0 -96 192 ) __TB_empty -0 -0 -0 1 1
+( 144 -192 256 ) ( 304 -224 224 ) ( 176 -224 224 ) __TB_empty -0 -0 -0 1 1
+( 208 -224 96 ) ( 336 -176 -0 ) ( 208 -176 -0 ) __TB_empty -0 -0 -0 1 1
+( 208 -224 192 ) ( 208 -176 -0 ) ( 128 -224 96 ) __TB_empty -0 -0 -0 1 1
+( 208 -128 -0 ) ( 208 -96 128 ) ( 160 -96 -0 ) __TB_empty -0 0 -0 1 1"""
 
 def test_function():
     # create mesh and switch to edit mode
