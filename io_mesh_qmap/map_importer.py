@@ -63,7 +63,7 @@ def intersect_plane_plane_plane(p1c, p1n, p2c, p2n, p3c, p3n):
 
 
 # Add to existing mesh (must already be in edit mode)
-def brush_to_mesh(brush_str, mesh, entity_num = -1, brush_num = -1):
+def brush_to_mesh(brush_str, bm, entity_num = -1, brush_num = -1):
     # Parse planes from brush_str
     faces = []
     for plane_str in brush_str.splitlines():
@@ -110,16 +110,13 @@ def brush_to_mesh(brush_str, mesh, entity_num = -1, brush_num = -1):
             len(valid_verts), len(all_verts), entity_num, brush_num))
         print(brush_str)
         return
-        
+            
     # Add valid verts to the bmesh
-    bm = bmesh.from_edit_mesh(mesh)
-    for vert in valid_verts:
-        nv = bm.verts.new(vert * map_scale)
-        nv.select_set(True)
-    bmesh.update_edit_mesh(mesh)
-        
-    bpy.ops.mesh.convex_hull()
-
+    new_verts = [None] * len(valid_verts)
+    for i, vert in enumerate(valid_verts):
+        new_verts[i] = bm.verts.new(vert * map_scale)
+    bmesh.ops.convex_hull(bm, input=new_verts, use_existing_faces=True)
+    
 
 def map_to_mesh(map_str, worldspawn_only = False):
     # Find first entity
@@ -129,6 +126,10 @@ def map_to_mesh(map_str, worldspawn_only = False):
     
     if bpy.context.active_object:
         bpy.ops.object.mode_set(mode='OBJECT')
+    bpy.ops.object.add(type='MESH', enter_editmode=True)
+    obj = bpy.context.object
+    mesh = obj.data
+    bm = bmesh.from_edit_mesh(mesh)
     
     while i0 != -1:
         # Is there a brush?
@@ -156,14 +157,13 @@ def map_to_mesh(map_str, worldspawn_only = False):
 #                        root.name = "entity_" + str(entity_num)
                     
                     # Create mesh and switch to edit mode
-                    bpy.ops.object.add(type='MESH', enter_editmode=True)
-                    obj = bpy.context.object
+#                    bpy.ops.object.add(type='MESH', enter_editmode=True)
+#                    obj = bpy.context.object
                     # obj.parent = root
-                    obj.name = "entity{}_brush{}".format(str(entity_num), str(brush_num))
-                    obj.data.name = obj.name
+#                    obj.name = "entity{}_brush{}".format(str(entity_num), str(brush_num))
+#                    obj.data.name = obj.name
                     
-                    brush_to_mesh(brush_str, obj.data, entity_num, brush_num)
-                    bpy.ops.object.mode_set(mode='OBJECT')
+                    brush_to_mesh(brush_str, bm, entity_num, brush_num)
                 
                 i2 = map_str.find('{', i1 + 1)
                 i1 = map_str.find('}', i1 + 1)
@@ -174,6 +174,8 @@ def map_to_mesh(map_str, worldspawn_only = False):
             break
         i0 = map_str.find('{', i1 + 1)
         entity_num += 1
+        
+    bmesh.update_edit_mesh(mesh)
         
 
 def import_map(context, filepath, options):
