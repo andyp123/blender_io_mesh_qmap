@@ -223,7 +223,8 @@ def import_map(context, filepath, options):
         print("Source file: %s" % (filepath))
         
         # Clear selection and reset cursor to prevent weirdness
-        bpy.ops.object.mode_set(mode='OBJECT')
+        if bpy.context.active_object:
+            bpy.ops.object.mode_set(mode='OBJECT')
         bpy.ops.object.select_all(action='DESELECT')
         bpy.context.scene.cursor.location = ((0,0,0))
         bpy.context.scene.cursor.rotation_euler = ((0,0,0))
