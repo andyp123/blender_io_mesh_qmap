@@ -38,7 +38,6 @@ from bpy_extras.io_utils import ImportHelper
 from bpy.props import StringProperty, BoolProperty, FloatProperty
 from bpy.types import Operator
 from . import map_importer
-import time
 
 # main code
 class MAPImporter(bpy.types.Operator, ImportHelper):
@@ -55,21 +54,21 @@ class MAPImporter(bpy.types.Operator, ImportHelper):
 
     scale: FloatProperty(
         name="Scale",
-        description="Adjust the size of the imported geometry.",
+        description="Adjust the size of the imported geometry",
         min=0.0, max=1.0,
         soft_min=0.0, soft_max=1.0,
         default=0.03125, # 1 Meter = 32 Quake units
         )
-
-    # remove_hidden: BoolProperty(
-    #     name="Remove Hidden",
-    #     description="Remove hidden geometry, such as triggers",
-    #     default=True,
-    #     )
+        
+    post_process: BoolProperty(
+        name="Post-Process Geometry",
+        description="With this disabled, the geometry will import MUCH faster, but won't be split into per-brush objects",
+        default=True,
+        )
 
     worldspawn_only: BoolProperty(
-        name="Worldspawn only",
-        description="Import only the main map geometry and ignore other models, such as doors, etc.",
+        name="Worldspawn Only",
+        description="Import only the main map geometry and ignore other models, such as doors, etc",
         default=False,
         )
     
@@ -77,8 +76,8 @@ class MAPImporter(bpy.types.Operator, ImportHelper):
         time_start = time.time()
         options = {
             'scale' : self.scale,
-            # 'remove_hidden' : self.remove_hidden,
-            'worldspawn_only': self.worldspawn_only,
+            'post_process' : self.post_process,
+            'worldspawn_only' : self.worldspawn_only,
             }
         map_importer.import_map(context, self.filepath, options)
         print("Elapsed time: %.2fs" % (time.time() - time_start))

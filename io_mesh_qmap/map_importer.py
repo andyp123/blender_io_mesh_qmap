@@ -25,6 +25,7 @@ from mathutils import (
     geometry,
 )
 import math
+import time
 
 
 # 1/32 to convert Quake scale to meters
@@ -121,53 +122,49 @@ def brush_to_mesh(brush_str, bm, entity_num = -1, brush_num = -1):
 def map_to_mesh(map_str, worldspawn_only = False):
     # Find first entity
     i0 = map_str.find('{')
-        
-    entity_num = 0
     
-    if bpy.context.active_object:
-        bpy.ops.object.mode_set(mode='OBJECT')
-    bpy.ops.object.add(type='MESH', enter_editmode=True)
-    obj = bpy.context.object
-    mesh = obj.data
-    bm = bmesh.from_edit_mesh(mesh)
+    entities = []
+    entity_num = 0
     
     while i0 != -1:
         # Is there a brush?
         i1 = map_str.find('}', i0 + 1)
         i2 = map_str.find('{', i0 + 1)
         
+        obj = None
+        mesh = None
+        bm = None
         brush_num = 0
         
-        # Ignore triggers
+        # Add all brushes for the current entity to the mesh, ignoring triggers
         if map_str.find('"classname" "trigger_', i0, i2) == -1:
-            root = None
-        
             # i2 < i1 means i1 is the end of a brush
             # i2 > i1 means i1 is the end of an entity
             while i2 < i1 and i2 != -1:
                 brush_str = map_str[i2 + 1: i1].strip()
-                # Ignore clip brushes
+                
+                # Convert brush to mesh, ignoring clip brushes
                 if brush_str.find(' clip ') == -1:
-#                    if root is None:
-#                        # Create parent transform for all brushes in entity
-#                        if bpy.context.active_object:
-#                            bpy.ops.object.mode_set(mode='OBJECT')
-#                        bpy.ops.object.empty_add(type='PLAIN_AXES', location=(0, 0, 0))
-#                        root = bpy.context.object
-#                        root.name = "entity_" + str(entity_num)
-                    
-                    # Create mesh and switch to edit mode
-#                    bpy.ops.object.add(type='MESH', enter_editmode=True)
-#                    obj = bpy.context.object
-                    # obj.parent = root
-#                    obj.name = "entity{}_brush{}".format(str(entity_num), str(brush_num))
-#                    obj.data.name = obj.name
-                    
+                    if mesh is None:
+                        # Create a mesh to add this brush to if one doesn't exist
+                        if bpy.context.active_object:
+                            bpy.ops.object.mode_set(mode='OBJECT')
+                        bpy.ops.object.add(type='MESH', enter_editmode=True)
+                        obj = bpy.context.object
+                        obj.name = str(entity_num)
+                        mesh = obj.data
+                        mesh.name = obj.name
+                        bm = bmesh.from_edit_mesh(mesh)
+                                        
                     brush_to_mesh(brush_str, bm, entity_num, brush_num)
                 
                 i2 = map_str.find('{', i1 + 1)
                 i1 = map_str.find('}', i1 + 1)
                 brush_num += 1
+        
+        if mesh is not None:
+            bmesh.update_edit_mesh(mesh)
+            entities.append(obj)
         
         # Move to next entity
         if worldspawn_only:
@@ -175,8 +172,48 @@ def map_to_mesh(map_str, worldspawn_only = False):
         i0 = map_str.find('{', i1 + 1)
         entity_num += 1
         
-    bmesh.update_edit_mesh(mesh)
+    return entities
+
+
+def post_process(entities):
+    bpy.ops.object.mode_set(mode='OBJECT')
+    
+    # Select meshes to set origin to bounding box center
+    # Leave worldspawn origin at 0,0,0
+    for obj in entities[1:]:
+        obj.select_set(True)
         
+    bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
+    bpy.ops.object.select_all(action='DESELECT')
+    
+    for obj in entities:
+        bpy.ops.object.empty_add(type='PLAIN_AXES', location=(obj.location))
+        root = bpy.context.active_object
+        root.name = "entity_" + obj.name
+        obj.name += ".000"
+        obj.data.name = obj.name
+        
+        # Separate mesh into sub objects
+        root.select_set(False)
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj
+        
+        # Convert to quads (using face 40d and shape 90d) and separate
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.tris_convert_to_quads(face_threshold=0.698132, shape_threshold=1.5708)
+        bpy.ops.mesh.separate(type='LOOSE')
+        
+        # Set parents and bounds
+        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
+        bpy.context.view_layer.objects.active = root
+        bpy.ops.object.parent_set(type='OBJECT', keep_transform=True)
+        for sub_obj in bpy.context.selected_objects:
+            if len(sub_obj.data.vertices) < 4:
+                # Delete objects with less than 4 vertices as they can't be a full convex object
+                # (occasionally get floating verts, etc.)
+                bpy.data.objects.remove(sub_obj, do_unlink=True)
+
 
 def import_map(context, filepath, options):
     with open(filepath, 'rt') as file:
@@ -184,7 +221,21 @@ def import_map(context, filepath, options):
 
         print("-- IMPORTING MAP --")
         print("Source file: %s" % (filepath))
-        map_to_mesh(file.read(), options['worldspawn_only'])    
+        
+        # Clear selection and reset cursor to prevent weirdness
+        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.select_all(action='DESELECT')
+        bpy.context.scene.cursor.location = ((0,0,0))
+        bpy.context.scene.cursor.rotation_euler = ((0,0,0))
+        
+        time_start = time.time()
+        entity_meshes = map_to_mesh(file.read(), options['worldspawn_only'])
+        print("Mesh conversion complete: %.2fs" % (time.time() - time_start))
+        
+        if options['post_process']:
+            time_start = time.time()
+            post_process(entity_meshes)
+            print("Post processing complete: %.2fs" % (time.time() - time_start))
     
     bpy.ops.object.mode_set(mode='OBJECT')
 
