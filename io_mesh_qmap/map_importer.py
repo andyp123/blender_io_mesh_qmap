@@ -127,6 +127,9 @@ def map_to_mesh(map_str, worldspawn_only = False):
         
     entity_num = 0
     
+    if bpy.context.active_object:
+        bpy.ops.object.mode_set(mode='OBJECT')
+    
     while i0 != -1:
         # Is there a brush?
         i1 = map_str.find('}', i0 + 1)
@@ -144,24 +147,23 @@ def map_to_mesh(map_str, worldspawn_only = False):
                 brush_str = map_str[i2 + 1: i1].strip()
                 # Ignore clip brushes
                 if brush_str.find(' clip ') == -1:
-                    if root is None:
-                        # Create parent transform for all brushes in entity
-                        if bpy.context.active_object:
-                            bpy.ops.object.mode_set(mode='OBJECT')
-                        bpy.ops.object.empty_add(type='PLAIN_AXES', location=(0, 0, 0))
-                        root = bpy.context.object
-                        root.name = "entity_" + str(entity_num)
+#                    if root is None:
+#                        # Create parent transform for all brushes in entity
+#                        if bpy.context.active_object:
+#                            bpy.ops.object.mode_set(mode='OBJECT')
+#                        bpy.ops.object.empty_add(type='PLAIN_AXES', location=(0, 0, 0))
+#                        root = bpy.context.object
+#                        root.name = "entity_" + str(entity_num)
                     
                     # Create mesh and switch to edit mode
-                    if bpy.context.active_object:
-                        bpy.ops.object.mode_set(mode='OBJECT')
                     bpy.ops.object.add(type='MESH', enter_editmode=True)
                     obj = bpy.context.object
-                    obj.parent = root
-                    obj.name = "{}_{}".format(str()entity_num, str(brush_num))
+                    # obj.parent = root
+                    obj.name = "entity{}_brush{}".format(str(entity_num), str(brush_num))
                     obj.data.name = obj.name
                     
                     brush_to_mesh(brush_str, obj.data, entity_num, brush_num)
+                    bpy.ops.object.mode_set(mode='OBJECT')
                 
                 i2 = map_str.find('{', i1 + 1)
                 i1 = map_str.find('}', i1 + 1)
