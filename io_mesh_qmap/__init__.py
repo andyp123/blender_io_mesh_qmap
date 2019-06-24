@@ -38,6 +38,7 @@ from bpy_extras.io_utils import ImportHelper
 from bpy.props import StringProperty, BoolProperty, FloatProperty
 from bpy.types import Operator
 from . import map_importer
+import time
 
 # main code
 class MAPImporter(bpy.types.Operator, ImportHelper):
