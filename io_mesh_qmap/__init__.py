@@ -60,25 +60,32 @@ class MAPImporter(bpy.types.Operator, ImportHelper):
         soft_min=0.0, soft_max=1.0,
         default=0.03125, # 1 Meter = 32 Quake units
         )
-        
-    post_process: BoolProperty(
-        name="Post-Process Geometry",
-        description="With this disabled, the geometry will import MUCH faster, but won't be split into per-brush objects",
-        default=True,
-        )
 
     worldspawn_only: BoolProperty(
         name="Worldspawn Only",
         description="Import only the main map geometry and ignore other models, such as doors, etc",
         default=False,
         )
+        
+    ignore_clip: BoolProperty(
+        name="Ignore Clip Brushes",
+        description="Ignore clip brushes",
+        default=True,
+        )
+        
+    ignore_triggers: BoolProperty(
+        name="Ignore Triggers",
+        description="Ignore trigger entities",
+        default=True,
+        )
     
     def execute(self, context):
         time_start = time.time()
         options = {
             'scale' : self.scale,
-            'post_process' : self.post_process,
             'worldspawn_only' : self.worldspawn_only,
+            'ignore_clip' : self.ignore_clip,
+            'ignore_triggers' : self.ignore_triggers,
             }
         map_importer.import_map(context, self.filepath, options)
         print("Elapsed time: %.2fs" % (time.time() - time_start))

@@ -17,20 +17,32 @@
 
 
 # Author
-# Andrew Palmer (andyp.123@gmail.com)
+# Andrew Palmer 
+# Github: https://github.com/andyp123/blender_io_mesh_qmap
 
 import bpy, bmesh
 from mathutils import (
     Vector,
     geometry,
+    Matrix,
 )
 import math
 import time
+import os
 
 
 # 1/32 to convert Quake scale to meters
 # This will be overriden by importer options
 map_scale = 0.03125
+
+worldspawn_color = (1.0, 1.0, 1.0, 1.0)
+solident_color = (0.5, 0.5, 0.5, 1.0)
+trigger_color = (0.7, 0.4, 0.8, 0.5)
+clip_color = (1.0, 0.0, 0.0, 0.5)
+water_color = (0.0, 0.7, 1.0, 0.7)
+lava_color = (1.0, 0.3, 0.0, 0.8)
+slime_color = (0.1, 0.8, 0.2, 0.8)
+sky_color = (0.2, 0.5, 1.0, 1.0)
 
 
 class MapFace:
@@ -40,7 +52,7 @@ class MapFace:
         # self.verts = []
 
 
-def get_plane (face_str):
+def get_plane(face_str):
     # get vectors that define the plane
     i0 = face_str.find('(')
     i1 = face_str.find(')')
@@ -63,12 +75,33 @@ def intersect_plane_plane_plane(p1c, p1n, p2c, p2n, p3c, p3n):
     return point
 
 
-# Add to existing mesh (must already be in edit mode)
-def brush_to_mesh(brush_str, bm, entity_num = -1, brush_num = -1):
+def get_texname_from_face(face_str):
+    i0 = face_str.rfind(')') + 2
+    i1 = face_str.find(' ', i0)
+    texname = face_str.substring(i0, i1)   
+
+
+def get_color_from_texname(texname, default):
+    if texname == 'clip':
+        return clip_color
+    if texname.startswith('sky'):
+        return sky_color
+    if texname.startswith('*'):
+        if texname.startswith('*lava'):
+            return lava_color
+        elif texname.startswith('*slime'):
+            return slime_color
+        else:
+            return water_color
+    return default
+
+
+# Convert brush string into a new mesh object
+def brush_to_mesh(brush_str, entity_num = -1, brush_num = -1):
     # Parse planes from brush_str
     faces = []
-    for plane_str in brush_str.splitlines():
-        plane = get_plane(plane_str)
+    for face_str in brush_str.splitlines():
+        plane = get_plane(face_str)
         face = MapFace(plane[0], plane[1])
         faces.append(face)
 
@@ -92,7 +125,7 @@ def brush_to_mesh(brush_str, bm, entity_num = -1, brush_num = -1):
         
     # Check each vert is on or inside the convex volume
     valid_verts = []
-    epsilon = 0.1
+    epsilon = 0.1 # TODO: What is the optimal value for epsilon?
     for i, vert in enumerate(all_verts):
         add_vert = True
         for face in faces:
@@ -111,15 +144,32 @@ def brush_to_mesh(brush_str, bm, entity_num = -1, brush_num = -1):
             len(valid_verts), len(all_verts), entity_num, brush_num))
         print(brush_str)
         return
-            
-    # Add valid verts to the bmesh
-    new_verts = [None] * len(valid_verts)
-    for i, vert in enumerate(valid_verts):
-        new_verts[i] = bm.verts.new(vert * map_scale)
-    bmesh.ops.convex_hull(bm, input=new_verts, use_existing_faces=True)
+                
+    # Add valid verts to a bmesh and run convex operation on them
+    bm = bmesh.new()
+    for vert in valid_verts:
+        bm.verts.new(vert * map_scale)
+    bmesh.ops.convex_hull(bm, input=bm.verts, use_existing_faces=False)
+    
+    # Remove loose vertices and convert to quads
+    # TODO
+    
+    # Recalculate the mesh and clean up the bmesh
+    # Name of the object is the same format as that used by Trenchbroom obj exporter
+    dataname = "entity{}_brush{}".format(entity_num, brush_num)
+    me = bpy.data.meshes.new(dataname)
+    bm.to_mesh(me)
+    bm.free()
+    ob = bpy.data.objects.new(dataname, me)
+    
+    return ob
     
 
-def map_to_mesh(map_str, worldspawn_only = False):
+def map_to_mesh(map_str, map_name, options):
+    worldspawn_only = options['worldspawn_only']
+    ignore_clip = options['ignore_clip']
+    ignore_triggers = options['ignore_triggers']
+    
     # Find first entity
     i0 = map_str.find('{')
     
@@ -130,89 +180,61 @@ def map_to_mesh(map_str, worldspawn_only = False):
         # Is there a brush?
         i1 = map_str.find('}', i0 + 1)
         i2 = map_str.find('{', i0 + 1)
-        
-        obj = None
-        mesh = None
-        bm = None
+
+        brushes = []
         brush_num = 0
         
         # Add all brushes for the current entity to the mesh, ignoring triggers
-        if map_str.find('"classname" "trigger_', i0, i2) == -1:
+        # Get the classname (ni = name index)
+        ni0 = map_str.find('"classname" "', i0, i2)
+        ni1 = map_str.find('"', ni0 + 13) # ["classname" "] is 13 chars
+        classname = "" if (ni0 == -1 or ni1 == -1) else map_str[ni0 + 13 : ni1]
+        is_trigger = True if classname.startswith('trigger') else False
+        
+        brush_color = worldspawn_color if entity_num == 0 \
+            else (trigger_color if is_trigger else solident_color)
+  
+        if not is_trigger or ignore_triggers is False:
             # i2 < i1 means i1 is the end of a brush
             # i2 > i1 means i1 is the end of an entity
             while i2 < i1 and i2 != -1:
-                brush_str = map_str[i2 + 1: i1].strip()
+                brush_str = map_str[i2 + 1 : i1].strip()
+                # Get the texture name
+                ni0 = brush_str.find('\n') # get end of first line
+                ni0 = brush_str.rfind(')', 0, ni0 - 1)
+                ni1 = brush_str.find(' ', ni0 + 2)
+                texname = "" if (ni0 == -1 or ni1 == 1) else brush_str[ni0 + 2: ni1]
                 
                 # Convert brush to mesh, ignoring clip brushes
-                if brush_str.find(' clip ') == -1:
-                    if mesh is None:
-                        # Create a mesh to add this brush to if one doesn't exist
-                        if bpy.context.active_object:
-                            bpy.ops.object.mode_set(mode='OBJECT')
-                        bpy.ops.object.add(type='MESH', enter_editmode=True)
-                        obj = bpy.context.object
-                        obj.name = str(entity_num)
-                        mesh = obj.data
-                        mesh.name = obj.name
-                        bm = bmesh.from_edit_mesh(mesh)
-                                        
-                    brush_to_mesh(brush_str, bm, entity_num, brush_num)
+                if texname != 'clip' or ignore_clip is False:
+                    brush = brush_to_mesh(brush_str, entity_num, brush_num)
+                    brush.color = get_color_from_texname(texname, brush_color)
+                    if brush is not None:
+                        brushes.append(brush)
                 
                 i2 = map_str.find('{', i1 + 1)
                 i1 = map_str.find('}', i1 + 1)
                 brush_num += 1
         
-        if mesh is not None:
-            bmesh.update_edit_mesh(mesh)
-            entities.append(obj)
+        if len(brushes) > 0:
+            entities.append(brushes)
         
         # Move to next entity
         if worldspawn_only:
             break
         i0 = map_str.find('{', i1 + 1)
         entity_num += 1
-        
-    return entities
 
-
-def post_process(entities):
-    bpy.ops.object.mode_set(mode='OBJECT')
-    
-    # Select meshes to set origin to bounding box center
-    # Leave worldspawn origin at 0,0,0
-    for obj in entities[1:]:
-        obj.select_set(True)
+    # Create collection and link created objects to the scene
+    if len(entities) > 0:
+        global_matrix = Matrix()
+        collection = bpy.data.collections.new(map_name)
+        bpy.context.scene.collection.children.link(collection)
         
-    bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
-    bpy.ops.object.select_all(action='DESELECT')
-    
-    for obj in entities:
-        bpy.ops.object.empty_add(type='PLAIN_AXES', location=(obj.location))
-        root = bpy.context.active_object
-        root.name = "entity_" + obj.name
-        obj.name += ".000"
-        obj.data.name = obj.name
-        
-        # Separate mesh into sub objects
-        root.select_set(False)
-        obj.select_set(True)
-        bpy.context.view_layer.objects.active = obj
-        
-        # Convert to quads (using face 40d and shape 90d) and separate
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.tris_convert_to_quads(face_threshold=0.698132, shape_threshold=1.5708)
-        bpy.ops.mesh.separate(type='LOOSE')
-        
-        # Set parents and bounds
-        bpy.ops.object.mode_set(mode='OBJECT')
-        bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
-        bpy.context.view_layer.objects.active = root
-        bpy.ops.object.parent_set(type='OBJECT', keep_transform=True)
-        for sub_obj in bpy.context.selected_objects:
-            if len(sub_obj.data.vertices) < 4:
-                # Delete objects with less than 4 vertices as they can't be a full convex object
-                # (occasionally get floating verts, etc.)
-                bpy.data.objects.remove(sub_obj, do_unlink=True)
+        for entity in entities:
+            for brush in entity:
+                collection.objects.link(brush)
+                brush.matrix_world = global_matrix
 
 
 def import_map(context, filepath, options):
@@ -229,15 +251,10 @@ def import_map(context, filepath, options):
         bpy.context.scene.cursor.location = ((0,0,0))
         bpy.context.scene.cursor.rotation_euler = ((0,0,0))
         
-        time_start = time.time()
-        entity_meshes = map_to_mesh(file.read(), options['worldspawn_only'])
-        print("Mesh conversion complete: %.2fs" % (time.time() - time_start))
+        map_name = os.path.basename(filepath).split('.')[0] + "_map"
         
-        if options['post_process']:
-            time_start = time.time()
-            post_process(entity_meshes)
-            print("Post processing complete: %.2fs" % (time.time() - time_start))
-    
-    bpy.ops.object.mode_set(mode='OBJECT')
+        time_start = time.time()
+        entity_meshes = map_to_mesh(file.read(), map_name, options)
+        print("Mesh conversion complete: %.2fs" % (time.time() - time_start))
 
     print("-- IMPORT COMPLETE --")
