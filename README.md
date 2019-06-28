@@ -12,7 +12,7 @@ to run this add-on. At the time of writing, Blender 2.80 is still in development
 this add-on may stop functioning due to a change in Blender, but I will try and keep it
 working.
 
-![Imported level (apdm3)](https://raw.githubusercontent.com/andyp123/blender_io_mesh_map/master/README_img/map_importer_apdm3.PNG)
+![Imported level (apdm3)](https://raw.githubusercontent.com/andyp123/blender_io_mesh_qmap/master/README_img/map_importer_apdm3.PNG)
 
 ## Installation
 1. Download the latest release from GitHub by clicking [here](https://github.com/andyp123/blender_io_mesh_qmap/releases).
