@@ -35,14 +35,51 @@ import os
 # This will be overriden by importer options
 map_scale = 0.03125
 
-worldspawn_color = (1.0, 1.0, 1.0, 1.0)
-solident_color = (0.5, 0.5, 0.5, 1.0)
-trigger_color = (0.7, 0.4, 0.8, 0.5)
-clip_color = (1.0, 0.0, 0.0, 0.5)
-water_color = (0.0, 0.7, 1.0, 0.7)
-lava_color = (1.0, 0.3, 0.0, 0.8)
-slime_color = (0.1, 0.8, 0.2, 0.8)
-sky_color = (0.2, 0.5, 1.0, 1.0)
+# Dictionary of materials properties
+material_definitions = {
+    # entity type
+    "worldspawn": { "color": (1.0, 1.0, 1.0, 1.0) },
+    "solident": { "color": (0.5, 0.5, 0.5, 1.0) },
+    "trigger": { "color": (0.7, 0.4, 0.8, 0.5) },
+    # brush type (overrides entity type, except for triggers)
+    "clip": { "color": (1.0, 0.0, 0.0, 0.5) },
+    "water": { "color": (0.0, 0.7, 1.0, 0.7) },
+    "lava": { "color": (1.0, 0.3, 0.0, 0.8) },
+    "slime": { "color": (0.1, 0.8, 0.2, 0.8) },
+    "sky": { "color": (0.2, 0.5, 1.0, 1.0) },
+    "hint": { "color": (1.0, 1.0, 0.0, 0.5) },
+}
+
+# Actual materials stored here
+materials = {}
+
+def create_materials():
+    for name, matdef in material_definitions.items():
+        mat = bpy.data.materials.new(name)
+        mat.diffuse_color = matdef["color"]
+        mat.use_backface_culling = True
+        materials[name] = mat
+
+
+def get_material_from_texname(texname, entity_type):
+    key = entity_type
+    
+    if entity_type != 'trigger':
+        if texname == 'clip':
+            key = 'clip'
+        elif texname.startswith('sky'):
+            key = 'sky'
+        elif texname.startswith('hint'):
+            key = 'hint'
+        elif texname.startswith('*'):
+            if texname.startswith('*lava'):
+                key = 'lava'
+            elif texname.startswith('*slime'):
+                key = 'slime'
+            else:
+                key = 'water'
+            
+    return materials.get(key, materials['worldspawn'])
 
 
 class MapFace:
@@ -79,21 +116,6 @@ def get_texname_from_face(face_str):
     i0 = face_str.rfind(')') + 2
     i1 = face_str.find(' ', i0)
     texname = face_str.substring(i0, i1)   
-
-
-def get_color_from_texname(texname, default):
-    if texname == 'clip':
-        return clip_color
-    if texname.startswith('sky'):
-        return sky_color
-    if texname.startswith('*'):
-        if texname.startswith('*lava'):
-            return lava_color
-        elif texname.startswith('*slime'):
-            return slime_color
-        else:
-            return water_color
-    return default
 
 
 # Convert brush string into a new mesh object
@@ -168,6 +190,7 @@ def brush_to_mesh(brush_str, entity_num = -1, brush_num = -1):
 def map_to_mesh(map_str, map_name, options):
     worldspawn_only = options['worldspawn_only']
     ignore_clip = options['ignore_clip']
+    ignore_hint = options['ignore_hint']
     ignore_triggers = options['ignore_triggers']
     
     # Find first entity
@@ -191,8 +214,8 @@ def map_to_mesh(map_str, map_name, options):
         classname = "" if (ni0 == -1 or ni1 == -1) else map_str[ni0 + 13 : ni1]
         is_trigger = True if classname.startswith('trigger') else False
         
-        brush_color = worldspawn_color if entity_num == 0 \
-            else (trigger_color if is_trigger else solident_color)
+        entity_type = 'worldspawn' if entity_num == 0 \
+            else ('trigger' if is_trigger else 'solident')
   
         if not is_trigger or ignore_triggers is False:
             # i2 < i1 means i1 is the end of a brush
@@ -206,10 +229,12 @@ def map_to_mesh(map_str, map_name, options):
                 texname = "" if (ni0 == -1 or ni1 == 1) else brush_str[ni0 + 2: ni1]
                 
                 # Convert brush to mesh, ignoring clip brushes
-                if texname != 'clip' or ignore_clip is False:
+                if (texname != 'clip' or ignore_clip is False) and (not texname.startswith('hint') or ignore_hint is False):
                     brush = brush_to_mesh(brush_str, entity_num, brush_num)
-                    brush.color = get_color_from_texname(texname, brush_color)
                     if brush is not None:
+                        mat = get_material_from_texname(texname, entity_type)
+                        brush.color = mat.diffuse_color
+                        brush.data.materials.append(mat)
                         brushes.append(brush)
                 
                 i2 = map_str.find('{', i1 + 1)
@@ -226,6 +251,7 @@ def map_to_mesh(map_str, map_name, options):
         entity_num += 1
 
     # Create collection and link created objects to the scene
+    # TODO: Group entities
     if len(entities) > 0:
         global_matrix = Matrix()
         collection = bpy.data.collections.new(map_name)
@@ -254,6 +280,7 @@ def import_map(context, filepath, options):
         map_name = os.path.basename(filepath).split('.')[0] + "_map"
         
         time_start = time.time()
+        create_materials()
         entity_meshes = map_to_mesh(file.read(), map_name, options)
         print("Mesh conversion complete: %.2fs" % (time.time() - time_start))
 

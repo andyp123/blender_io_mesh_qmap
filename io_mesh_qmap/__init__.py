@@ -24,7 +24,7 @@ if "bpy" in locals():
 bl_info = {
     "name": "Import Quake MAP format",
     "author": "Andrew Palmer",
-    "version": (0,1),
+    "version": (0,2),
     "blender": (2, 80, 0),
     "location": "File > Import > Quake MAP (.map)",
     "description": "Import geometry from a Quake 1 MAP file.",
@@ -66,16 +66,22 @@ class MAPImporter(bpy.types.Operator, ImportHelper):
         description="Import only the main map geometry and ignore other models, such as doors, etc",
         default=False,
         )
-        
+                
+    ignore_triggers: BoolProperty(
+        name="Ignore Triggers",
+        description="Ignore trigger entities",
+        default=True,
+        )
+
     ignore_clip: BoolProperty(
         name="Ignore Clip Brushes",
         description="Ignore clip brushes",
         default=True,
         )
-        
-    ignore_triggers: BoolProperty(
-        name="Ignore Triggers",
-        description="Ignore trigger entities",
+    
+    ignore_hint: BoolProperty(
+        name="Ignore Hint Brushes",
+        description="Ignore hint brushes",
         default=True,
         )
     
@@ -84,8 +90,9 @@ class MAPImporter(bpy.types.Operator, ImportHelper):
         options = {
             'scale' : self.scale,
             'worldspawn_only' : self.worldspawn_only,
-            'ignore_clip' : self.ignore_clip,
             'ignore_triggers' : self.ignore_triggers,
+            'ignore_clip' : self.ignore_clip,
+            'ignore_hint' : self.ignore_hint,
             }
         map_importer.import_map(context, self.filepath, options)
         print("Elapsed time: %.2fs" % (time.time() - time_start))

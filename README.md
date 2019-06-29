@@ -37,12 +37,17 @@ Worldspawn is the name given to the entity representing the world in Quake. It i
 always the very first entity defined in a MAP or BSP file. If this option is enabled
 only the first entity will be imported.
 
+### Ignore Triggers (default: On)
+Triggers are also composed of brushes, so can be imported into Blender with this add-on,
+however, they can get in the way, so by default they are not imported. Disable this
+option if you would like to import triggers.
+
 ### Ignore Clip (default: On)
 Clip is the name of a texture applied to brushes in all Quake engine games in order
 to simplify the collision mesh and iron out parts on which the player could get stuck.
-Enable this option to import them
+Disable this option to import them
 
-### Ignore Triggers (default: On)
-Triggers are also composed of brushes, so can be imported into Blender with this add-on,
-however, they can get in the way, so by default they are not imported. Enable this
-option if you would like to import triggers.
+### Ignore Hint (default: On)
+Hint is the name of a texture applied to brushes in some Quake engine games in order
+to give the BSP compiler a hint as to where to create portals. Disable this option to
+import them.
