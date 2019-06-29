@@ -86,7 +86,6 @@ class MapFace:
     def __init__(self, plane_co, plane_no):
         self.plane_co = plane_co
         self.plane_no = plane_no
-        # self.verts = []
 
 
 def get_plane(face_str):
@@ -170,12 +169,13 @@ def brush_to_mesh(brush_str, entity_num = -1, brush_num = -1):
     # Add valid verts to a bmesh and run convex operation on them
     bm = bmesh.new()
     for vert in valid_verts:
-        bm.verts.new(vert * map_scale)
+        v = bm.verts.new(vert * map_scale)
     bmesh.ops.convex_hull(bm, input=bm.verts, use_existing_faces=False)
     
-    # Remove loose vertices and convert to quads
-    # TODO
-    
+    # This seems to leave some loose vertices, so delete them
+    non_manifold_verts = [v for v in bm.verts if not v.is_manifold]
+    bmesh.ops.delete(bm, geom=non_manifold_verts, context='VERTS')
+        
     # Recalculate the mesh and clean up the bmesh
     # Name of the object is the same format as that used by Trenchbroom obj exporter
     dataname = "entity{}_brush{}".format(entity_num, brush_num)
