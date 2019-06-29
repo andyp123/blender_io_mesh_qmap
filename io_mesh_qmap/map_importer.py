@@ -39,6 +39,7 @@ map_scale = 0.03125
 material_definitions = {
     # entity type
     "worldspawn": { "color": (1.0, 1.0, 1.0, 1.0) },
+    "detail": { "color": (0.5, 0.5, 0.7, 1.0) },
     "solident": { "color": (0.5, 0.5, 0.5, 1.0) },
     "trigger": { "color": (0.7, 0.4, 0.8, 0.5) },
     # brush type (overrides entity type, except for triggers)
@@ -212,12 +213,17 @@ def map_to_mesh(map_str, map_name, options):
         ni0 = map_str.find('"classname" "', i0, i2)
         ni1 = map_str.find('"', ni0 + 13) # ["classname" "] is 13 chars
         classname = "" if (ni0 == -1 or ni1 == -1) else map_str[ni0 + 13 : ni1]
-        is_trigger = True if classname.startswith('trigger') else False
-        
-        entity_type = 'worldspawn' if entity_num == 0 \
-            else ('trigger' if is_trigger else 'solident')
+        # func_detail and func_group are basically just part of the worldspawn
+        entity_type = 'worldspawn'
+        if entity_num != 0:
+            if classname.startswith('trigger'):
+                entity_type = 'trigger'
+            elif classname == 'func_detail':
+                entity_type = 'detail'
+            else: # elif classname != 'func_group':
+                entity_type = 'solident'
   
-        if not is_trigger or ignore_triggers is False:
+        if not entity_type is 'trigger' or ignore_triggers is False:
             # i2 < i1 means i1 is the end of a brush
             # i2 > i1 means i1 is the end of an entity
             while i2 < i1 and i2 != -1:
