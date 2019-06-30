@@ -37,6 +37,10 @@ Worldspawn is the name given to the entity representing the world in Quake. It i
 always the very first entity defined in a MAP or BSP file. If this option is enabled
 only the first entity will be imported.
 
+### Group Entities (default: On)
+This will create an empty for each entity, and parent its brushes to the empty. Disable
+this option if you want all the brushes to be imported into the root of the map's collection.
+
 ### Ignore Triggers (default: On)
 Triggers are also composed of brushes, so can be imported into Blender with this add-on,
 however, they can get in the way, so by default they are not imported. Disable this
@@ -51,3 +55,13 @@ Disable this option to import them
 Hint is the name of a texture applied to brushes in some Quake engine games in order
 to give the BSP compiler a hint as to where to create portals. Disable this option to
 import them.
+
+## Tips for Working with Imported Data
+Materials are created when importing a map for various geometry types, so by using
+Blender's 'Select Linked' feature (Shift+L), you can select all geometry of a certain type.
+For example, to select all the sky in an imported map, click on one part of the sky, hit
+'Shift+L' and select 'Material'.
+
+By default, all brushes in the MAP file are imported with origins at (0,0,0). If you would
+like to move the origin of all brushes to their center, the easiest way is to select everything
+and use the 'Set Origin' function.

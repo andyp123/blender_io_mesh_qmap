@@ -66,6 +66,12 @@ class MAPImporter(bpy.types.Operator, ImportHelper):
         description="Import only the main map geometry and ignore other models, such as doors, etc",
         default=False,
         )
+        
+    group_entities: BoolProperty(
+        name="Group Entities",
+        description="Group imported geometry by entity, or just import everything into a single collection",
+        default=True
+        )
                 
     ignore_triggers: BoolProperty(
         name="Ignore Triggers",
@@ -90,6 +96,7 @@ class MAPImporter(bpy.types.Operator, ImportHelper):
         options = {
             'scale' : self.scale,
             'worldspawn_only' : self.worldspawn_only,
+            'group_entities' : self.group_entities,
             'ignore_triggers' : self.ignore_triggers,
             'ignore_clip' : self.ignore_clip,
             'ignore_hint' : self.ignore_hint,

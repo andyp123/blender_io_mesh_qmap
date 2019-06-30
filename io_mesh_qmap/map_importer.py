@@ -24,7 +24,7 @@ import bpy, bmesh
 from mathutils import (
     Vector,
     geometry,
-    Matrix,
+    # Matrix,
 )
 import math
 import time
@@ -102,6 +102,35 @@ def get_plane(face_str):
     v3 = Vector([float(f) for f in face_str[i0+1:i1].split(' ') if f != ''])
     # return plane_coord, plane_normal
     return (v1, (v1-v2).cross(v3-v2).normalized())
+
+
+def get_min_max(bounds):
+    min = [999999.0, 999999.0, 999999.0]
+    max = [-999999.0, -999999.0, -999999.0]
+    
+    for co in bounds:
+        if   co[0] < min[0]: min[0] = co[0]
+        elif co[0] > max[0]: max[0] = co[0]
+        if   co[1] < min[1]: min[1] = co[1]
+        elif co[1] > max[1]: max[1] = co[1]
+        if   co[2] < min[2]: min[2] = co[2]
+        elif co[2] > max[2]: max[2] = co[2]        
+
+    return [min, max]
+
+
+def update_min_max(co, min_max):
+    min = min_max[0]
+    max = min_max[1]
+    
+    if   co[0] < min[0]: min[0] = co[0]
+    elif co[0] > max[0]: max[0] = co[0]
+    if   co[1] < min[1]: min[1] = co[1]
+    elif co[1] > max[1]: max[1] = co[1]
+    if   co[2] < min[2]: min[2] = co[2]
+    elif co[2] > max[2]: max[2] = co[2]
+    
+    return min_max
 
 
 def intersect_plane_plane_plane(p1c, p1n, p2c, p2n, p3c, p3n):
@@ -222,6 +251,7 @@ def map_to_mesh(map_str, map_name, options):
                 entity_type = 'detail'
             else: # elif classname != 'func_group':
                 entity_type = 'solident'
+        entity_min_max = [[999999.0, 999999.0, 999999.0], [-999999.0, -999999.0, -999999.0]]
   
         if not entity_type is 'trigger' or ignore_triggers is False:
             # i2 < i1 means i1 is the end of a brush
@@ -238,6 +268,11 @@ def map_to_mesh(map_str, map_name, options):
                 if (texname != 'clip' or ignore_clip is False) and (not texname.startswith('hint') or ignore_hint is False):
                     brush = brush_to_mesh(brush_str, entity_num, brush_num)
                     if brush is not None:
+                        # Update entity extents
+                        brush_min_max = get_min_max(brush.bound_box)
+                        update_min_max(brush_min_max[0], entity_min_max)
+                        update_min_max(brush_min_max[1], entity_min_max)
+                        # Assign material
                         mat = get_material_from_texname(texname, entity_type)
                         brush.color = mat.diffuse_color
                         brush.data.materials.append(mat)
@@ -248,7 +283,11 @@ def map_to_mesh(map_str, map_name, options):
                 brush_num += 1
         
         if len(brushes) > 0:
-            entities.append(brushes)
+            min = entity_min_max[0]
+            max = entity_min_max[1]
+            loc = ((min[0] + max[0]) * 0.5, (min[1] + max[1]) * 0.5, (min[2] + max[2]) * 0.5)
+            entity = {"classname": classname, "brushes": brushes, "extents": entity_min_max, "center": loc}
+            entities.append(entity)
         
         # Move to next entity
         if worldspawn_only:
@@ -257,16 +296,29 @@ def map_to_mesh(map_str, map_name, options):
         entity_num += 1
 
     # Create collection and link created objects to the scene
-    # TODO: Group entities
     if len(entities) > 0:
-        global_matrix = Matrix()
         collection = bpy.data.collections.new(map_name)
         bpy.context.scene.collection.children.link(collection)
         
-        for entity in entities:
-            for brush in entity:
-                collection.objects.link(brush)
-                brush.matrix_world = global_matrix
+        if options['group_entities']:
+            for i, entity in enumerate(entities):
+                # Create a parent entity
+                classname = entity["classname"]
+                brushes = entity["brushes"]
+                root = bpy.data.objects.new("entity{} ({})".format(str(i), classname), object_data=None)
+                loc = (0,0,0) if (classname == "worldspawn" or classname == "func_detail") else entity["center"]
+                loc_inv = (-loc[0], -loc[1], -loc[2])
+                root.location = loc
+                # Parent brushes to entity for easy grouping
+                for brush in brushes:
+                    brush.parent = root
+                    brush.location = loc_inv
+                    collection.objects.link(brush)
+                collection.objects.link(root)
+        else:
+            for entity in entities:
+                for brush in entity["brushes"]:
+                    collection.objects.link(brush)
 
 
 def import_map(context, filepath, options):
