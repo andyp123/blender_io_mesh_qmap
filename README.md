@@ -7,10 +7,8 @@ Quake MAP files, which are used by Quake level editors such as Trenchbroom to de
 the level geometry using convex volumes known as brushes. These volumes can be
 imported into Blender and used for convex collision meshes for other game engines.
 
-__Note:__ You will need Blender 2.80 Beta (available [here](https://builder.blender.org/download/))
-to run this add-on. At the time of writing, Blender 2.80 is still in development, and
-this add-on may stop functioning due to a change in Blender, but I will try and keep it
-working.
+__Note:__ You will need Blender 2.80 or above (tested up to 3.3 alpha) to use this add-on.
+Get the latest version of Blender [here](https://www.blender.org).
 
 ![Imported level (apdm3)](https://raw.githubusercontent.com/andyp123/blender_io_mesh_qmap/master/README_img/map_importer_apdm3.PNG)
 
