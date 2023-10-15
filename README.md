@@ -15,7 +15,7 @@ Get the latest version of Blender [here](https://www.blender.org).
 ## Installation
 1. Download the latest release from GitHub by clicking [here](https://github.com/andyp123/blender_io_mesh_qmap/releases).
 2. In Blender, open Preferences (Edit > Preferences) and switch to the Add-ons section.
-3. Select 'Install Add-on from file...' and select the file that you downloaded.
+3. Select 'Install' and select the zip file that you downloaded.
 4. Search for the add-on in the list (enter 'map' to quickly find it) and enable it.
 5. Save the preferences if you would like the script to always be enabled.
 
